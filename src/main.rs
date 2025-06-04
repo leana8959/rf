@@ -1,5 +1,6 @@
 use std::fs::File;
-use std::io::Read;
+use std::io::{ErrorKind, Read};
+use std::process::exit;
 use clap::Parser;
 
 #[derive(Clone)]
@@ -121,12 +122,19 @@ fn brainfuck(instructions: &Vec<Instruction>, buffer: &mut Vec<u8>, data_ptr: &m
         match item {
             Instruction::IncrementPtr => *data_ptr += 1,
             Instruction::DecrementPtr => *data_ptr -= 1,
-            Instruction::Increment => buffer[*data_ptr] += 1,
-            Instruction::Decrement => buffer[*data_ptr] -= 1,
+            Instruction::Increment => buffer[*data_ptr] = buffer[*data_ptr].wrapping_add(1),
+            Instruction::Decrement => buffer[*data_ptr] = buffer[*data_ptr].wrapping_sub(1),
             Instruction::Write => print!("{}", buffer[*data_ptr] as char),
             Instruction::Read => {
                 let mut input: [u8; 1] = [0; 1];
-                std::io::stdin().read_exact(&mut input).expect("Failed to read stdin.");
+                match std::io::stdin().read_exact(&mut input) {
+                    Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
+                        // TODO: Is this considered an error? I know some brainfuck programs rely on this behaviour
+                        eprintln!("Error: Input ended too early");
+                        exit(1);
+                    },
+                    _ => ()
+                }
                 buffer[*data_ptr] = input[0];
             },
             Instruction::Loop(nested_loops) => {

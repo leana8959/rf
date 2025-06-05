@@ -1,7 +1,6 @@
+use clap::Parser;
 use std::fs::File;
 use std::io::{ErrorKind, Read};
-use std::process::exit;
-use clap::Parser;
 
 #[derive(Clone)]
 enum OpCode {
@@ -126,17 +125,23 @@ fn brainfuck(instructions: &Vec<Instruction>, buffer: &mut Vec<u8>, data_ptr: &m
             Instruction::Decrement => buffer[*data_ptr] = buffer[*data_ptr].wrapping_sub(1),
             Instruction::Write => print!("{}", buffer[*data_ptr] as char),
             Instruction::Read => {
+                // Do nothing if input has ended
+                //
+                // <https://brainfuck.org/brainfuck.html>
+                // > However, if the input is coming from a file and all the bytes from
+                // > that file have been received already, or if the user signals an analogous
+                // > end-of-input condition from the keyboard, a request for input will not pause
+                // > the program; instead, the input command will have no effect and the program
+                // > will go on running. At least, that's the behavior of Urban Müller's compiler and
+                // > three-line C interpreter; some other implementations also set the cell indicated
+                // > by the pointer to -1, 0, or 255. Several reasons for preferring the "no change"
+                // > behavior are mentioned here.
                 let mut input: [u8; 1] = [0; 1];
                 match std::io::stdin().read_exact(&mut input) {
-                    Err(err) if err.kind() == ErrorKind::UnexpectedEof => {
-                        // TODO: Is this considered an error? I know some brainfuck programs rely on this behaviour
-                        eprintln!("Error: Input ended too early");
-                        exit(1);
-                    },
-                    _ => ()
+                    Err(err) if err.kind() == ErrorKind::UnexpectedEof => continue,
+                    _ => buffer[*data_ptr] = input[0],
                 }
-                buffer[*data_ptr] = input[0];
-            },
+            }
             Instruction::Loop(nested_loops) => {
                 while buffer[*data_ptr] != 0 {
                     brainfuck(&nested_loops, buffer, data_ptr);
@@ -153,7 +158,8 @@ fn main() {
 
     let mut file = File::open(filename).expect("file not found");
     let mut src = String::new();
-    file.read_to_string(&mut src).expect("Failed to read from file");
+    file.read_to_string(&mut src)
+        .expect("Failed to read from file");
 
     let opcodes = trans(src);
     let instructions = parse(opcodes);
@@ -161,5 +167,5 @@ fn main() {
     let mut buffer: Vec<u8> = vec![0; 1024];
     let mut data_ptr = 512;
 
-    brainfuck(&instructions, &mut buffer, & mut data_ptr);
+    brainfuck(&instructions, &mut buffer, &mut data_ptr);
 }
